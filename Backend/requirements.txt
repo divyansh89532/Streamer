@@ -1,0 +1,15 @@
+fastapi
+uvicorn 
+ultralytics
+opencv-python
+aiortc
+uvicorn[standard]
+azure-storage-blob
+pymongo
+python-dotenv
+faiss-cpu
+insightface
+onnx
+onnxruntime
+motor
+python-multipart
