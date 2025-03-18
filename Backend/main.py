@@ -17,7 +17,7 @@ from Detection_Model.database import *
 from Detection_Model.face_utils import *
 
 app = FastAPI()
-CONFIDENCE_THRESHOLD = 0.6
+CONFIDENCE_THRESHOLD = 0.57
 
 # Allow CORS for React to communicate with FastAPI
 app.add_middleware(
@@ -43,6 +43,7 @@ thresholds = {
     "helmet": 0.5,
     "hairnet": 0.5  # Can be adjusted as needed
 }
+global employee_id
 
 frame_counter = 0
 active_websockets = {}
@@ -51,7 +52,7 @@ last_upload_time = {}  # Dictionary to store last upload time for each model
 # Open RTSP Camera
 # rtsp_url = "rtsp://admin:Meridian@2024@14.97.235.83:554/Streaming/Channels/101"
 # rtsp_url = "rtsp://170.93.143.139/rtplive/470011e600ef003a004ee33696235daa"
-rtsp_url =0
+rtsp_url = 0
 cap = cv2.VideoCapture(rtsp_url)
 
 # Set buffer size to reduce latency
@@ -138,8 +139,7 @@ def draw_bounding_boxes(frame, results,model_name):
         spacing = 35  # Spacing between each key
         circle_radius = 10
         padding = 10 
-        # bg_padding_x = 100  # Background width
-        # bg_padding_y = 25  # Background height
+
 
         for index, (class_name, color) in enumerate(labels):
         # Calculate text size dynamically
@@ -250,7 +250,7 @@ async def get_images(model_name: str):
     """
     model_name = model_name.lower()
     # Get the collection for the provided model name.
-    if model_name == 'custom':
+    if model_name == 'face':
         model_name = 'face_verification'
     else:
         model_name = model_name    
@@ -275,6 +275,7 @@ class FaceDetectionError(Exception):
 @app.post("/register/")
 async def register_user(
     name: str = Form(...),
+    employee_id: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
     gender: str = Form(...),
@@ -315,6 +316,7 @@ async def register_user(
 
         # Prepare user data
         user_data = {
+            "employee_id":employee_id,
             "unique_id": unique_id,
             "FAISS":uuid_int,
             "name": name,
@@ -359,9 +361,6 @@ async def websocket_verify(websocket: WebSocket):
     # Add this WebSocket to active connections
     active_websockets["verify"] = websocket
 
-    # Timestamp for throttling Azure uploads
-    last_upload_time = 0
-
     try:
         while True:
             # Read a frame from the RTSP stream or webcam
@@ -371,6 +370,7 @@ async def websocket_verify(websocket: WebSocket):
                 break
 
             try:
+                person_verified = False
                 # Perform face detection and verification
                 faces = [(x1, y1, x2, y2, embedding) for x1, y1, x2, y2, embedding in detect_faces(frame)]
                 if faces:
@@ -385,18 +385,74 @@ async def websocket_verify(websocket: WebSocket):
                         int(user["FAISS"]): user
                         for user in face_collection.find(
                             {"FAISS": {"$in": list(matched_ids)}},
-                            {"_id": 0, "FAISS": 1, "name": 1, "unique_id": 1}
+                            {"_id": 0, "FAISS": 1, "name": 1, "unique_id": 1, "gender": 1, "employee_id": 1}
                         )
                     }
+
+                    # Track occupied regions for labels
+                    occupied_regions = []
 
                     # Draw bounding boxes and labels for matched users
                     for (x1, y1, x2, y2, embedding), i_row, d_row in zip(faces, I, D):
                         for i, dist in zip(i_row, d_row):
                             user = users_info.get(int(i))
                             if user and dist <= CONFIDENCE_THRESHOLD:
+                                # Draw bounding box
                                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                cv2.putText(frame, user["name"], (x1, y1 - 10),
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                                # Prepare the text to display (name, gender, employee ID)
+                                person_verified = True
+                                employee_id = user['employee_id']
+                                details = [
+                                    f"Name: {user['name']}",
+                                    f"Gender: {user['gender']}",
+                                    f"Employee ID: {user['employee_id']}"
+                                ]
+
+                                # Calculate maximum text width and total height for the label
+                                max_text_width = 0
+                                total_text_height = 0
+                                for text in details:
+                                    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                                    max_text_width = max(max_text_width, text_size[0])
+                                    total_text_height += text_size[1] + 10  # Add spacing between lines
+
+                                # Add padding to the label dimensions
+                                label_width = max_text_width + 20  # Add padding
+                                label_height = total_text_height + 10  # Add padding
+
+                                # Initial position for the label (right side of the bounding box)
+                                label_x = x2 + 20
+                                label_y = y1
+
+                                # Adjust label position to avoid overlapping
+                                for region in occupied_regions:
+                                    if (label_x < region[0] + region[2] and
+                                        label_x + label_width > region[0] and
+                                        label_y < region[1] + region[3] and
+                                        label_y + label_height > region[1]):
+                                        # Overlap detected, shift label down
+                                        label_y = region[1] + region[3] + 10  # Add 10px spacing
+
+                                # Draw Transparent Black Background for the label
+                                overlay = frame.copy()
+                                cv2.rectangle(overlay, (label_x, label_y),
+                                              (label_x + label_width, label_y + label_height),
+                                              (0, 0, 0), -1)
+                                alpha = 0.4  # Transparency Level
+                                cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+
+                                # Draw each line of text
+                                current_y = label_y + 20  # Start drawing text with padding
+                                for text in details:
+                                    text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+                                    text_x = label_x + 10  # Add padding
+                                    cv2.putText(frame, text, (text_x, current_y),
+                                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, lineType=cv2.LINE_AA)
+                                    current_y += text_size[1] + 10  # Move to the next line
+
+                                # Add this label's region to the occupied regions list
+                                occupied_regions.append((label_x, label_y, label_width, label_height))
 
                 # Encode the processed frame as JPEG
                 success, buffer = cv2.imencode(".jpg", frame)
@@ -405,7 +461,13 @@ async def websocket_verify(websocket: WebSocket):
                     continue
 
                 frame_bytes = buffer.tobytes()
-                
+
+                # Upload the frame to Azure Blob Storage only if a person is verified
+                if person_verified:
+                    unique_id = str(uuid.uuid4())
+                    await upload_image_to_azure_face("face_verification", frame_bytes, employee_id)
+                    print(f"[INFO] Image uploaded to Azure for verified person: {unique_id}")
+
                 # Try sending the frame. If the connection is closed, break out.
                 try:
                     await websocket.send_bytes(frame_bytes)
@@ -413,16 +475,8 @@ async def websocket_verify(websocket: WebSocket):
                     print(f"[ERROR] Face verification error: {send_error}")
                     break  # Exit the loop if sending fails
 
-                # Upload the frame to Azure Blob Storage every 3 second
-                current_time = time.time()
-                if current_time - last_upload_time >= 3:
-                    last_upload_time = current_time
-                    unique_id = str(uuid.uuid4())
-                    await upload_image_to_azure("face_verification", frame_bytes)
-
             except Exception as e:
                 print(f"[ERROR] Face verification error during processing: {e}")
-                # Optionally break here as well if you want to stop on processing errors
                 break
 
             # Add a small delay to control the frame rate

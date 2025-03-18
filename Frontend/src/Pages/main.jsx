@@ -10,27 +10,27 @@ import { ClipLoader } from "react-spinners";
 
 // Hardcoded descriptions for each model
 const modelDescriptions = {
-  Face: "This is a lightweight, real-time optimized solution for facial recognition. Designed for efficiency, it ensures high-speed processing without compromising accuracy. Its streamlined architecture makes it ideal for applications requiring quick response times, such as surveillance, authentication, and attendance tracking. With minimal computational overhead, Face integrates seamlessly into edge devices, mobile applications, and cloud-based systems. Whether for security, AI-driven interactions, or smart monitoring, it delivers reliable performance with low latency.",
+  // Face: "This is a lightweight, real-time optimized solution for facial recognition. Designed for efficiency, it ensures high-speed processing without compromising accuracy. Its streamlined architecture makes it ideal for applications requiring quick response times, such as surveillance, authentication, and attendance tracking. With minimal computational overhead, Face integrates seamlessly into edge devices, mobile applications, and cloud-based systems. Whether for security, AI-driven interactions, or smart monitoring, it delivers reliable performance with low latency.",
   Mask: "This is a lightweight, real-time optimized solution for mask detection. Designed for efficiency, it ensures high-speed processing without compromising accuracy. Its streamlined architecture makes it ideal for applications requiring quick response times, such as compliance monitoring, workplace safety, and public health enforcement. With minimal computational overhead, Mask integrates seamlessly into edge devices, mobile applications, and cloud-based systems. Whether for security screenings, or AI-driven safety measures, it delivers reliable performance with low latency.",
   Helmet: "This is a lightweight, real-time optimized solution for safety helmet detection. Designed for efficiency, it ensures high-speed processing without compromising accuracy. Its streamlined architecture makes it ideal for applications requiring quick response times, such as construction site monitoring, industrial safety compliance, and workplace security. With minimal computational overhead, Helmet integrates seamlessly into edge devices, mobile applications, or cloud-based systems. Whether for worker protection, AI-driven safety enforcement, or automated monitoring, it delivers reliable performance with low latency.",
   Hairnet: "This is a lightweight, real-time optimized solution for hairnet detection. Designed for efficiency, it ensures high-speed processing without compromising accuracy. Its streamlined architecture makes it ideal for applications requiring quick response times, such as food processing, healthcare, and hygiene compliance. With minimal computational overhead, Hairnet integrates seamlessly into edge devices, mobile applications, and cloud-based systems. Whether for quality control, or AI-driven safety monitoring, it delivers reliable performance with low latency.",
-  Custom: "This is a user-trained custom model for specific object detection.",
+  Face: "This is a user-trained custom model for specific object detection.",
 };
 
 // Icons for each model
 const modelIcons = {
-  Face: <FaRegSmileWink className="text-blue-500 text-2xl" />,
+  // Face: <FaRegSmileWink className="text-blue-500 text-2xl" />,
   Mask: <FaHeadSideMask className="text-green-500 text-2xl" />,
   Helmet: <FaHelmetSafety className="text-orange-500 text-2xl" />,
   Hairnet: <GiHairStrands className="text-purple-500 text-2xl" />,
-  Custom: <FaBrain className="text-red-500 text-2xl" />,
+  Face: <FaRegSmileWink className="text-blue-500 text-2xl" />,
 };
 
 const ImageCarousel = ({ model, backendURI }) => {
   const [images, setImages] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [index, setIndex] = useState(0);
-  const imagesPerSlide = window.innerWidth < 768 ? 2 : 4;
+  const imagesPerSlide = window.innerWidth < 768 ? 2 : 3;
 
   useEffect(() => {
     if (!model) return;
@@ -82,17 +82,18 @@ const ImageCarousel = ({ model, backendURI }) => {
     );
   }
 
-  const displayedImages = [];
-  for (let i = 0; i < imagesPerSlide; i++) {
-    displayedImages.push(images[(index + i) % images.length]);
-  }
+  const displayedImages =
+  images.length >= imagesPerSlide
+    ? Array.from({ length: imagesPerSlide }, (_, i) => images[(index + i) % images.length])
+    : images;
+
 
   return (
-    <div className="w-full h-full overflow-hidden relative rounded-lg shadow-lg bg-gray-100 dark:bg-gray-700 p-2">
+    <div className="w-full h-full overflow-hidden relative rounded-lg shadow-lg bg-gray-100 dark:bg-gray-700 p-1 flex items-center justify-center">
       <AnimatePresence mode="wait">
         <motion.div
           key={index}
-          className="flex flex-row md:flex-col gap-2"
+          className="flex flex-row md:flex-col gap-2 items-center justify-center"
           initial={{ x: 200, opacity: 0, scale: 0.8 }}
           animate={{ x: 0, opacity: 1, scale: 1 }}
           exit={{ x: 200, opacity: 0, scale: 0.8 }}
@@ -102,10 +103,10 @@ const ImageCarousel = ({ model, backendURI }) => {
             <motion.img
               key={i}
               src={img}
-              className="w-[100px] h-[120px] object-cover rounded-lg shadow-md"
+              className="w-[200px] h-[180px] object-cover rounded-lg shadow-md"
               whileHover={{ scale: 1.1 }}
               style={{
-                marginTop: i === 0 && window.innerWidth >= 768 ? "2.5rem" : 0,
+                // marginTop: i === 0 && window.innerWidth >= 768 ? "2.5rem" : 0,
                 marginLeft: i === 0 && window.innerWidth < 768 ? "2.2rem" : 0,
               }}
             />
@@ -350,15 +351,16 @@ const YoloModelComponent = () => {
   const [selectedModel, setSelectedModel] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const modelsList = ["Face", "Mask", "Helmet", "Hairnet", "Custom"];
+  // const modelsList = ["Face", "Mask", "Helmet", "Hairnet", "Custom"]; 
+  const modelsList = ["Mask", "Helmet", "Hairnet", "Face"]; 
   const backendURI = "http://localhost:8000";
 
   const modelEndpoints = {
-    Face: `${backendURI}/ws/face`,
+    // Face: `${backendURI}/ws/face`,
     Mask: `${backendURI}/ws/mask`,
     Helmet: `${backendURI}/ws/helmet`,
     Hairnet: `${backendURI}/ws/hairnet`,
-    Custom: `${backendURI}/ws/verify`,
+    Face: `${backendURI}/ws/verify`,
   };
 
   return (
@@ -384,7 +386,7 @@ const YoloModelComponent = () => {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, ease: "easeInOut" }}
-            className="w-full md:w-1/12 h-auto flex justify-center items-center mt-4 md:mt-0"
+            className="w-full md:w-2/8 h-auto flex justify-center items-center mt-4 md:mt-0"
           >
             <ImageCarousel model={selectedModel} backendURI={backendURI} />
           </motion.div>
